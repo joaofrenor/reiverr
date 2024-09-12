@@ -1,64 +1,32 @@
-FROM --platform=linux/amd64 node:18-alpine as pre-production
+# Use Node.js as the base image
+FROM node:18.14.0
 
-WORKDIR /usr/src/app
+# Set working directory
+WORKDIR /app
 
-#COPY . .
+# Copy package.json and package-lock.json
+COPY package*.json ./
+COPY backend/package*.json ./backend/
 
-COPY package.json .
-COPY package-lock.json .
+# Install dependencies
+RUN npm install
+RUN npm install --prefix backend
 
-COPY backend/package.json ./backend/package.json
-COPY backend/package-lock.json ./backend/package-lock.json
-
-RUN npm i
-
-# Add tini for better signal handling
-RUN apk add --no-cache tini
-ENTRYPOINT ["/sbin/tini", "--"]
-
-RUN #npm ci --prefix backend --omit dev
-RUN npm ci --prefix backend
-
+# Copy the rest of the application code
 COPY . .
 
+# Build the app
 RUN npm run build
 
-FROM --platform=linux/amd64 node:18-alpine as production
+# Expose the port the app runs on
+EXPOSE 9494
 
-RUN mkdir -p /usr/src/app
-WORKDIR /usr/src/app
+# Set the config volume
+VOLUME /config
 
-ENV PORT=9494
+# Set environment variables
 ENV NODE_ENV=production
+ENV CONFIG_DIR=/config
 
-COPY --from=pre-production /usr/src/app/backend/dist ./dist
-COPY --from=pre-production /usr/src/app/backend/node_modules ./node_modules
-
-COPY backend/package.json .
-COPY backend/package-lock.json .
-
-#RUN npm ci --omit dev
-
-RUN mkdir -p ./config
-
-RUN ln -s /usr/src/app/config /config
-
-CMD [ "npm", "run", "start:prod" ]
-
-#FROM node:18 as development
-#
-#ENV NODE_ENV=development
-#
-#RUN mkdir -p /usr/src/app
-#WORKDIR /usr/src/app
-#
-#COPY package.json .
-#COPY package-lock.json .
-#
-#RUN npm i
-#
-#RUN mkdir -p ./config
-#
-#RUN ln -s /usr/src/app/config /config
-#
-#CMD [ "npm", "run", "dev" ]
+# Start the application
+CMD ["node", "backend/dist/src/main"]
